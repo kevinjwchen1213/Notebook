@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="slides-format" content="viewport">
+    <title>雲地混合架構圖</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+        @theme {
+            --color-bg: #0d1117;
+            --color-bg-deep: #020617;
+            --color-surface: #161b22;
+            --color-text: #e6edf3;
+            --color-text-secondary: #8b949e;
+            --color-text-muted: #6e7681;
+            --color-accent-1: #58a6ff;
+            --color-accent-2: #3fb950;
+            --color-accent-3: #f0883e;
+            --color-glass-bg: rgba(255,255,255,0.05);
+            --color-glass-border: rgba(255,255,255,0.08);
+            --color-vignette: rgba(0,0,0,0.5);
+            --font-display: 'Instrument Serif', serif;
+            --font-body: 'Inter', sans-serif;
+        }
+    </style>
+    <style>
+        :root {
+            --color-bg: #0d1117;
+            --color-text: #e6edf3;
+            --glow-color-rgb: 88,166,255;
+            /* Layer colors */
+            --aws-color: #f0883e;
+            --aws-bg: rgba(240,136,62,0.08);
+            --aws-border: rgba(240,136,62,0.4);
+            --hybrid-color: #a371f7;
+            --hybrid-bg: rgba(163,113,247,0.08);
+            --hybrid-border: rgba(163,113,247,0.4);
+            --pve-color: #58a6ff;
+            --pve-bg: rgba(88,166,255,0.08);
+            --pve-border: rgba(88,166,255,0.4);
+            --outpost-color: #3fb950;
+            --outpost-bg: rgba(63,185,80,0.08);
+            --outpost-border: rgba(63,185,80,0.4);
+        }
+        *, *::before, *::after { box-sizing: border-box; }
+        html, body { background: var(--color-bg); margin: 0; }
+        body { font-family: 'Inter', sans-serif; color: var(--color-text); overflow: hidden; height: 100vh; width: 100vw; }
+        .deck { width: 100vw; height: 100vh; position: relative; }
+        .slide { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--color-bg); display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; transform: scale(0.96); transition: opacity 0.6s ease, transform 0.6s ease; pointer-events: none; overflow: hidden; }
+        .slide.active { opacity: 1; transform: scale(1); pointer-events: all; }
+        .slide > .content { position: relative; z-index: 2; width: 100%; max-width: 1280px; padding: clamp(1rem, 2.5vw, 2.5rem); }
+        .nav-controls { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 14px; z-index: 100; background: rgba(255,255,255,0.05); backdrop-filter: blur(10px); padding: 8px 20px; border-radius: 40px; border: 1px solid rgba(255,255,255,0.08); }
+        .nav-btn { width: 36px; height: 36px; border: none; background: rgba(255,255,255,0.06); color: var(--color-accent-1); border-radius: 50%; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.3s; }
+        .nav-btn:hover { background: rgba(255,255,255,0.12); }
+        .slide-dots { display: flex; gap: 7px; }
+        .slide-dots .dot { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,0.15); cursor: pointer; transition: background 0.3s, transform 0.3s; }
+        .slide-dots .dot.active { background: var(--color-accent-1); transform: scale(1.3); }
+        .slide-counter { font-size: 0.75rem; color: var(--color-text-muted); min-width: 36px; text-align: center; }
+        .reveal { opacity: 0; transform: translateY(16px); }
+        @keyframes float-slow { 0%{transform:translate(0,0) scale(1)} 33%{transform:translate(50px,-40px) scale(1.1)} 66%{transform:translate(-30px,30px) scale(0.92)} 100%{transform:translate(0,0) scale(1)} }
+        @keyframes float-drift { 0%{transform:translate(0,0)} 50%{transform:translate(-60px,-50px) scale(1.12)} 100%{transform:translate(0,0)} }
+        .gradient-mesh { position:absolute; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
+        .blob { position:absolute; border-radius:50%; filter:blur(80px); }
+        .blob:nth-child(1) { animation: float-slow 12s ease-in-out infinite; }
+        .blob:nth-child(2) { animation: float-drift 16s ease-in-out infinite; }
+        .blob:nth-child(3) { animation: float-slow 20s ease-in-out infinite reverse; }
+        .slide::after { content:''; position:absolute; inset:0; z-index:1; pointer-events:none; background:radial-gradient(ellipse at center,transparent 50%,rgba(0,0,0,0.5) 100%); }
+
+        /* Architecture diagram styles */
+        .arch-layer { border-radius: 12px; padding: 14px 18px; margin: 0; position: relative; }
+        .layer-aws { background: var(--aws-bg); border: 1.5px solid var(--aws-border); }
+        .layer-hybrid { background: var(--hybrid-bg); border: 1.5px solid var(--hybrid-border); }
+        .layer-pve { background: var(--pve-bg); border: 1.5px solid var(--pve-border); }
+        .layer-outpost { background: var(--outpost-bg); border: 1.5px solid var(--outpost-border); }
+        .layer-label { font-size: 0.65rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+        .node-box { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 10px; text-align: center; font-size: 0.7rem; line-height: 1.4; }
+        .node-box .icon { font-size: 1.2rem; margin-bottom: 3px; }
+        .node-box .label { font-weight: 600; color: var(--color-text); }
+        .node-box .sublabel { color: var(--color-text-muted); font-size: 0.6rem; }
+        .node-box.highlight-aws { border-color: var(--aws-border); background: rgba(240,136,62,0.1); }
+        .node-box.highlight-green { border-color: var(--outpost-border); background: rgba(63,185,80,0.1); }
+        .node-box.highlight-blue { border-color: var(--pve-border); background: rgba(88,166,255,0.1); }
+        .node-box.highlight-purple { border-color: var(--hybrid-border); background: rgba(163,113,247,0.1); }
+        .node-box.highlight-red { border-color: rgba(248,81,73,0.5); background: rgba(248,81,73,0.1); }
+
+        /* Arrow connector */
+        .arrow-area { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 4px 0; font-size: 0.6rem; color: var(--color-text-muted); position: relative; }
+        .arrow-line { flex: 1; height: 1px; max-width: 180px; }
+        .arrow-label { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; padding: 2px 7px; white-space: nowrap; font-size: 0.58rem; }
+        .arrow-v { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 0.6rem; color: var(--color-text-muted); }
+        .arrow-v .v-line { width: 1px; height: 14px; }
+        .arrow-v .v-label { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; padding: 1px 6px; white-space: nowrap; font-size: 0.57rem; }
+
+        /* Cost badge */
+        .cost-badge { display: inline-flex; align-items: center; gap: 5px; background: rgba(248,81,73,0.15); border: 1px solid rgba(248,81,73,0.4); border-radius: 6px; padding: 3px 10px; font-size: 0.65rem; font-weight: 700; color: #f85149; }
+        .cost-badge-green { background: rgba(63,185,80,0.15); border-color: rgba(63,185,80,0.4); color: #3fb950; }
+        .slide-title { font-size: clamp(1rem, 2vw, 1.35rem); font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+    </style>
+</head>
+<body>
+<div class="mouse-spotlight" style="position:fixed;inset:0;z-index:99;pointer-events:none;"></div>
+<div class="deck">
+
+    <!-- ========== SLIDE 1: TITLE ========== -->
+    <div class="slide active" data-slide="1">
+        <div class="gradient-mesh">
+            <div class="blob" style="width:500px;height:500px;top:-120px;right:-100px;background:#f0883e;opacity:0.12;"></div>
+            <div class="blob" style="width:350px;height:350px;bottom:-80px;left:-60px;background:#58a6ff;opacity:0.10;"></div>
+            <div class="blob" style="width:250px;height:250px;top:40%;left:15%;background:#a371f7;opacity:0.08;"></div>
+        </div>
+        <div class="content text-center">
+            <div style="font-size:3.5rem;margin-bottom:1rem;animation:float-slow 4s ease-in-out infinite;" class="reveal">☁️</div>
+            <h1 class="reveal" style="font-family:'Instrument Serif',serif;font-size:clamp(2rem,5vw,3.8rem);font-weight:700;background:linear-gradient(135deg,#f0883e,#58a6ff,#3fb950);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:0.8rem;line-height:1.2;">雲地混合架構方案</h1>
+            <p class="reveal" style="font-size:clamp(0.85rem,1.5vw,1.1rem);color:#8b949e;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:1.8rem;">3-Node PVE/Ceph + PBS ｜ AWS 混合雲部署參考</p>
+            <div class="reveal" style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;">
+                <div style="background:rgba(240,136,62,0.12);border:1px solid rgba(240,136,62,0.4);border-radius:8px;padding:0.5rem 1.2rem;font-size:0.8rem;color:#f0883e;">方案一：PVE + AWS Outposts</div>
+                <div style="background:rgba(63,185,80,0.12);border:1px solid rgba(63,185,80,0.4);border-radius:8px;padding:0.5rem 1.2rem;font-size:0.8rem;color:#3fb950;">方案二：PBS + S3 最省方案 ✅ 建議</div>
+            </div>
+            <p class="reveal" style="margin-top:1.5rem;font-size:0.75rem;color:#6e7681;">↓ 按方向鍵或點擊箭頭切換架構圖</p>
+        </div>
+    </div>
+
+    <!-- ========== SLIDE 2: ARCH 1 - PVE + Outposts ========== -->
+    <div class="slide" data-slide="2">
+        <div class="gradient-mesh">
+            <div class="blob" style="width:400px;height:400px;top:-100px;right:-80px;background:#f0883e;opacity:0.08;"></div>
+            <div class="blob" style="width:300px;height:300px;bottom:-60px;left:-50px;background:#3fb950;opacity:0.07;"></div>
+        </div>
+        <div class="content">
+            <div class="slide-title reveal">
+                <span>🏗️ 方案一：3-Node PVE/Ceph + PBS + AWS Outposts 雲地混合架構</span>
+                <span class="cost-badge">5年 TCO NT$4,852萬</span>
+            </div>
+
+            <!-- LAYER 1: AWS Cloud (Top) -->
+            <div class="arch-layer layer-aws reveal" style="margin-bottom:6px;">
+                <div class="layer-label" style="color:var(--aws-color);">☁️ 第一層：AWS 公有雲 (ap-northeast-3 台北)</div>
+                <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;">
+                    <div class="node-box highlight-aws">
+                        <div class="icon">🧊</div>
+                        <div class="label">S3 Glacier</div>
+                        <div class="sublabel">長期歸檔備份<br>$0.004/GB/月</div>
+                    </div>
+                    <div class="node-box highlight-aws">
+                        <div class="icon">📊</div>
+                        <div class="label">CloudWatch</div>
+                        <div class="sublabel">監控/告警<br>SNS 通知</div>
+                    </div>
+                    <div class="node-box highlight-aws">
+                        <div class="icon">🔐</div>
+                        <div class="label">IAM / Console</div>
+                        <div class="sublabel">統一權限管理<br>Policy-based</div>
+                    </div>
+                    <div class="node-box highlight-aws">
+                        <div class="icon">🌐</div>
+                        <div class="label">VPC</div>
+                        <div class="sublabel">Site-to-Site VPN<br>或 Direct Connect</div>
+                    </div>
+                    <div class="node-box highlight-aws">
+                        <div class="icon">💰</div>
+                        <div class="label">Enterprise Support</div>
+                        <div class="sublabel">強制必要<br>$5,500/月起</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Arrow 1 -->
+            <div class="reveal" style="display:flex;align-items:center;justify-content:center;gap:16px;padding:3px 0;font-size:0.6rem;color:#6e7681;">
+                <div style="flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(163,113,247,0.5),transparent);"></div>
+                <div style="background:rgba(163,113,247,0.1);border:1px solid rgba(163,113,247,0.3);border-radius:4px;padding:2px 8px;white-space:nowrap;">Service Link (加密 TLS | &lt;10ms)</div>
+                <div style="flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(163,113,247,0.5),transparent);"></div>
+            </div>
+
+            <!-- LAYER 2: AWS Outposts (Middle) -->
+            <div class="arch-layer layer-outpost reveal" style="margin-bottom:6px;">
+                <div class="layer-label" style="color:var(--outpost-color);">⚡ 第二層：混合層 — AWS Outposts Rack (本地 AWS，機房內)</div>
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
+                    <div class="node-box highlight-green">
+                        <div class="icon">🖥️</div>
+                        <div class="label">EC2 Instances</div>
+                        <div class="sublabel">爆破/備援 VMs<br>m6i 系列</div>
+                    </div>
+                    <div class="node-box highlight-green">
+                        <div class="icon">💾</div>
+                        <div class="label">EBS on Outposts</div>
+                        <div class="sublabel">本地儲存<br>gp2 $0.10/GB</div>
+                    </div>
+                    <div class="node-box highlight-green">
+                        <div class="icon">📦</div>
+                        <div class="label">S3 on Outposts</div>
+                        <div class="sublabel">PBS 備份目的地<br>$0.023/GB/月</div>
+                    </div>
+                    <div class="node-box" style="border-color:rgba(248,81,73,0.4);background:rgba(248,81,73,0.08);">
+                        <div class="icon">💸</div>
+                        <div class="label">Rack 月費</div>
+                        <div class="sublabel" style="color:#f85149;">~$7,148/月<br>含 EC2 容量</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Arrow 2 -->
+            <div class="reveal" style="display:flex;align-items:center;justify-content:center;gap:16px;padding:3px 0;font-size:0.6rem;color:#6e7681;">
+                <div style="flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(88,166,255,0.5),transparent);"></div>
+                <div style="display:flex;gap:8px;">
+                    <div style="background:rgba(88,166,255,0.1);border:1px solid rgba(88,166,255,0.3);border-radius:4px;padding:2px 8px;white-space:nowrap;">IPSec VPN / Direct Connect</div>
+                    <div style="background:rgba(63,185,80,0.1);border:1px solid rgba(63,185,80,0.3);border-radius:4px;padding:2px 8px;white-space:nowrap;">Live Migration (DR)</div>
+                    <div style="background:rgba(163,113,247,0.1);border:1px solid rgba(163,113,247,0.3);border-radius:4px;padding:2px 8px;white-space:nowrap;">PBS Sync Job 每日</div>
+                </div>
+                <div style="flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(88,166,255,0.5),transparent);"></div>
+            </div>
+
+            <!-- LAYER 3: On-Premises (Bottom) -->
+            <div class="arch-layer layer-pve reveal">
+                <div class="layer-label" style="color:var(--pve-color);">🏢 第三層：地端機房 On-Premises</div>
+                <div style="display:grid;grid-template-columns:3fr 1fr;gap:8px;">
+                    <div>
+                        <div style="font-size:0.6rem;color:#6e7681;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.1em;">PVE Cluster (HA)</div>
+                        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
+                            <div class="node-box highlight-blue">
+                                <div class="icon">🖥️</div>
+                                <div class="label">PVE Node 1</div>
+                                <div class="sublabel">Ceph OSD<br>NVMe SSD</div>
+                            </div>
+                            <div class="node-box highlight-blue">
+                                <div class="icon">🖥️</div>
+                                <div class="label">PVE Node 2</div>
+                                <div class="sublabel">Ceph OSD<br>NVMe SSD</div>
+                            </div>
+                            <div class="node-box highlight-blue">
+                                <div class="icon">🖥️</div>
+                                <div class="label">PVE Node 3</div>
+                                <div class="sublabel">Ceph OSD<br>NVMe SSD</div>
+                            </div>
+                            <div class="node-box" style="border-color:rgba(88,166,255,0.3);">
+                                <div class="icon">💾</div>
+                                <div class="label">Ceph 儲存</div>
+                                <div class="sublabel">3TB (3x副本)<br>分散式 HA</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font-size:0.6rem;color:#6e7681;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.1em;">備份服務</div>
+                        <div class="node-box highlight-purple" style="height:calc(100% - 20px);">
+                            <div class="icon">🗄️</div>
+                            <div class="label">PBS</div>
+                            <div class="sublabel">Proxmox Backup Server<br>40 VMs 每日增量<br>112 vCPU / 128GB<br>ZFS 去重壓縮</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== SLIDE 3: ARCH 2 - PBS + S3 ========== -->
+    <div class="slide" data-slide="3">
+        <div class="gradient-mesh">
+            <div class="blob" style="width:400px;height:400px;top:-80px;right:-80px;background:#3fb950;opacity:0.10;"></div>
+            <div class="blob" style="width:280px;height:280px;bottom:-60px;left:-40px;background:#58a6ff;opacity:0.08;"></div>
+        </div>
+        <div class="content">
+            <div class="slide-title reveal">
+                <span>✅ 方案二：3-Node PVE/Ceph + PBS + AWS S3 最省方案（無需 Outposts）</span>
+                <span class="cost-badge cost-badge-green">5年 TCO NT$766萬 ⬇️ 省 84%</span>
+            </div>
+
+            <!-- LAYER 1: AWS Cloud (Top) -->
+            <div class="arch-layer layer-aws reveal" style="margin-bottom:6px;">
+                <div class="layer-label" style="color:var(--aws-color);">☁️ 第一層：AWS 公有雲 (ap-northeast-3 台北) — 僅備份/監控用途</div>
+                <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;">
+                    <div class="node-box highlight-aws">
+                        <div class="icon">📦</div>
+                        <div class="label">S3 Standard</div>
+                        <div class="sublabel">近期備份 &lt;90天<br>$0.023/GB/月</div>
+                    </div>
+                    <div class="node-box highlight-aws">
+                        <div class="icon">🧊</div>
+                        <div class="label">S3 Glacier</div>
+                        <div class="sublabel">長期歸檔 &gt;90天<br>$0.004/GB/月</div>
+                    </div>
+                    <div class="node-box highlight-aws">
+                        <div class="icon">🔄</div>
+                        <div class="label">Lifecycle Rule</div>
+                        <div class="sublabel">自動轉存<br>90天觸發</div>
+                    </div>
+                    <div class="node-box highlight-aws">
+                        <div class="icon">📊</div>
+                        <div class="label">CloudWatch</div>
+                        <div class="sublabel">備份監控告警<br>SNS Email</div>
+                    </div>
+                    <div class="node-box highlight-green" style="position:relative;">
+                        <div style="position:absolute;top:-8px;right:-8px;background:#3fb950;border-radius:4px;padding:1px 5px;font-size:0.55rem;font-weight:700;color:#0d1117;">免 Enterprise Support</div>
+                        <div class="icon">💰</div>
+                        <div class="label">費用</div>
+                        <div class="sublabel" style="color:#3fb950;">~$85/月<br>5年 NT$16萬</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Arrow: Simple HTTPS -->
+            <div class="reveal" style="display:flex;align-items:center;justify-content:center;gap:16px;padding:4px 0;">
+                <div style="flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(63,185,80,0.6),transparent);"></div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+                    <div style="background:rgba(63,185,80,0.12);border:1px solid rgba(63,185,80,0.4);border-radius:4px;padding:2px 10px;font-size:0.6rem;color:#3fb950;white-space:nowrap;">🔒 HTTPS / TLS Port 443（無需 VPN、無需 Outposts）</div>
+                    <div style="background:rgba(88,166,255,0.1);border:1px solid rgba(88,166,255,0.3);border-radius:4px;padding:2px 10px;font-size:0.6rem;color:#58a6ff;white-space:nowrap;">PBS Sync Job 每日增量 → S3</div>
+                </div>
+                <div style="flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(63,185,80,0.6),transparent);"></div>
+            </div>
+
+            <!-- LAYER 2: NO Outposts (Highlight) -->
+            <div class="reveal" style="background:rgba(63,185,80,0.06);border:1.5px dashed rgba(63,185,80,0.3);border-radius:10px;padding:8px 16px;margin-bottom:6px;display:flex;align-items:center;gap:12px;">
+                <div style="font-size:1.4rem;">🚫</div>
+                <div>
+                    <div style="font-size:0.68rem;font-weight:700;color:#3fb950;text-transform:uppercase;letter-spacing:0.1em;">無混合層 — 不需要 Outposts Rack</div>
+                    <div style="font-size:0.6rem;color:#6e7681;margin-top:2px;">省去 Outposts Rack NT$2,880萬 + Enterprise Support NT$1,056萬 = 節省 NT$3,936萬（5年）</div>
+                </div>
+                <div style="margin-left:auto;display:flex;gap:6px;flex-shrink:0;">
+                    <div style="background:rgba(248,81,73,0.12);border:1px solid rgba(248,81,73,0.3);border-radius:5px;padding:3px 8px;font-size:0.6rem;color:#f85149;text-decoration:line-through;">Outposts Rack ~$7,148/月</div>
+                    <div style="background:rgba(248,81,73,0.12);border:1px solid rgba(248,81,73,0.3);border-radius:5px;padding:3px 8px;font-size:0.6rem;color:#f85149;text-decoration:line-through;">Enterprise Support $5,500/月</div>
+                </div>
+            </div>
+
+            <!-- LAYER 3: On-Premises (Bottom) -->
+            <div class="arch-layer layer-pve reveal">
+                <div class="layer-label" style="color:var(--pve-color);">🏢 第三層：地端機房 On-Premises（與方案一相同，架構完全不變）</div>
+                <div style="display:grid;grid-template-columns:3fr 1fr;gap:8px;">
+                    <div>
+                        <div style="font-size:0.6rem;color:#6e7681;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.1em;">PVE Cluster (HA) — 主要生產負載 100%</div>
+                        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
+                            <div class="node-box highlight-blue">
+                                <div class="icon">🖥️</div>
+                                <div class="label">PVE Node 1</div>
+                                <div class="sublabel">Ceph OSD<br>NVMe SSD</div>
+                            </div>
+                            <div class="node-box highlight-blue">
+                                <div class="icon">🖥️</div>
+                                <div class="label">PVE Node 2</div>
+                                <div class="sublabel">Ceph OSD<br>NVMe SSD</div>
+                            </div>
+                            <div class="node-box highlight-blue">
+                                <div class="icon">🖥️</div>
+                                <div class="label">PVE Node 3</div>
+                                <div class="sublabel">Ceph OSD<br>NVMe SSD</div>
+                            </div>
+                            <div class="node-box" style="border-color:rgba(88,166,255,0.3);">
+                                <div class="icon">💾</div>
+                                <div class="label">Ceph 儲存</div>
+                                <div class="sublabel">3TB (3x副本)<br>分散式 HA</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font-size:0.6rem;color:#6e7681;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.1em;">備份服務（核心角色）</div>
+                        <div class="node-box highlight-green" style="height:calc(100% - 20px);border-color:rgba(63,185,80,0.5);background:rgba(63,185,80,0.12);">
+                            <div class="icon">🗄️</div>
+                            <div class="label" style="color:#3fb950;">PBS</div>
+                            <div class="sublabel">Proxmox Backup Server<br>40 VMs 每日增量<br>直接推送 AWS S3<br>ZFS 去重壓縮<br>RTO 約 2-4 小時</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== SLIDE 4: COMPARISON ========== -->
+    <div class="slide" data-slide="4">
+        <div class="gradient-mesh">
+            <div class="blob" style="width:450px;height:450px;top:-100px;right:-80px;background:#a371f7;opacity:0.10;"></div>
+            <div class="blob" style="width:300px;height:300px;bottom:-60px;left:-40px;background:#58a6ff;opacity:0.08;"></div>
+        </div>
+        <div class="content">
+            <h2 class="reveal" style="font-family:'Instrument Serif',serif;font-size:clamp(1.3rem,2.5vw,1.8rem);font-weight:700;margin-bottom:16px;text-align:center;">⚖️ 方案一 vs 方案二 — 5年 TCO 決策比較</h2>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+                <!-- 方案一 -->
+                <div class="reveal" style="background:rgba(240,136,62,0.07);border:1.5px solid rgba(240,136,62,0.35);border-radius:12px;padding:16px;">
+                    <div style="font-size:0.75rem;font-weight:700;color:#f0883e;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">方案一：PVE + AWS Outposts</div>
+                    <table style="width:100%;font-size:0.68rem;border-collapse:collapse;">
+                        <tr style="border-bottom:1px solid rgba(255,255,255,0.07);"><td style="padding:4px 0;color:#8b949e;">地端 PVE 硬體+訂閱+電費</td><td style="text-align:right;color:#e6edf3;">NT$750萬</td></tr>
+                        <tr style="border-bottom:1px solid rgba(255,255,255,0.07);"><td style="padding:4px 0;color:#8b949e;">Outposts Rack 租賃 (5yr)</td><td style="text-align:right;color:#f85149;">NT$2,880萬</td></tr>
+                        <tr style="border-bottom:1px solid rgba(255,255,255,0.07);"><td style="padding:4px 0;color:#8b949e;">Enterprise Support (強制)</td><td style="text-align:right;color:#f85149;">NT$1,056萬</td></tr>
+                        <tr style="border-bottom:1px solid rgba(255,255,255,0.07);"><td style="padding:4px 0;color:#8b949e;">EBS / S3 / 傳輸 / 服務</td><td style="text-align:right;color:#e6edf3;">NT$166萬</td></tr>
+                        <tr><td style="padding:6px 0;font-weight:700;color:#f0883e;">5年 TCO 合計</td><td style="text-align:right;font-weight:700;font-size:0.85rem;color:#f0883e;">NT$4,852萬</td></tr>
+                    </table>
+                </div>
+                <!-- 方案二 -->
+                <div class="reveal" style="background:rgba(63,185,80,0.07);border:2px solid rgba(63,185,80,0.45);border-radius:12px;padding:16px;position:relative;">
+                    <div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:#3fb950;border-radius:6px;padding:2px 10px;font-size:0.65rem;font-weight:700;color:#0d1117;">✅ 推薦方案</div>
+                    <div style="font-size:0.75rem;font-weight:700;color:#3fb950;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">方案二：PVE + PBS + S3</div>
+                    <table style="width:100%;font-size:0.68rem;border-collapse:collapse;">
+                        <tr style="border-bottom:1px solid rgba(255,255,255,0.07);"><td style="padding:4px 0;color:#8b949e;">地端 PVE 硬體+訂閱+電費</td><td style="text-align:right;color:#e6edf3;">NT$750萬</td></tr>
+                        <tr style="border-bottom:1px solid rgba(255,255,255,0.07);"><td style="padding:4px 0;color:#8b949e;">AWS S3 Standard + Glacier</td><td style="text-align:right;color:#3fb950;">NT$13.7萬</td></tr>
+                        <tr style="border-bottom:1px solid rgba(255,255,255,0.07);"><td style="padding:4px 0;color:#8b949e;">CloudWatch + 傳輸</td><td style="text-align:right;color:#3fb950;">NT$2.6萬</td></tr>
+                        <tr style="border-bottom:1px solid rgba(255,255,255,0.07);"><td style="padding:4px 0;color:#3fb950;">Outposts / Enterprise Support</td><td style="text-align:right;color:#3fb950;font-weight:600;">NT$0 ✓</td></tr>
+                        <tr><td style="padding:6px 0;font-weight:700;color:#3fb950;">5年 TCO 合計</td><td style="text-align:right;font-weight:700;font-size:0.85rem;color:#3fb950;">NT$766萬</td></tr>
+                    </table>
+                </div>
+            </div>
+            <!-- Key Metrics -->
+            <div class="reveal" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
+                <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px;text-align:center;">
+                    <div style="font-size:1.5rem;font-weight:800;color:#3fb950;">84%</div>
+                    <div style="font-size:0.62rem;color:#6e7681;margin-top:2px;">方案二節省比例</div>
+                </div>
+                <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px;text-align:center;">
+                    <div style="font-size:1.5rem;font-weight:800;color:#3fb950;">NT$4,086萬</div>
+                    <div style="font-size:0.62rem;color:#6e7681;margin-top:2px;">5年絕對節省金額</div>
+                </div>
+                <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px;text-align:center;">
+                    <div style="font-size:1.5rem;font-weight:800;color:#58a6ff;">2-4hr</div>
+                    <div style="font-size:0.62rem;color:#6e7681;margin-top:2px;">方案二 RTO（可接受）</div>
+                </div>
+                <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px;text-align:center;">
+                    <div style="font-size:1.5rem;font-weight:800;color:#f0883e;">&lt;1hr</div>
+                    <div style="font-size:0.62rem;color:#6e7681;margin-top:2px;">方案一 RTO（但貴 6x）</div>
+                </div>
+            </div>
+            <div class="reveal" style="margin-top:10px;background:rgba(63,185,80,0.06);border:1px solid rgba(63,185,80,0.3);border-radius:8px;padding:8px 14px;font-size:0.68rem;color:#8b949e;">
+                💡 <strong style="color:#3fb950;">建議：</strong>優先採用方案二（PBS + S3）作為基礎架構。待 VMs 規模成長超過 3 節點容量，或有嚴格合規需求（金融/醫療），再重新評估 Outposts 1U/2U Server（非 Rack，月費 $548 起）作為漸進擴充。
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div class="nav-controls">
+    <button class="nav-btn" onclick="changeSlide(-1)">&#8249;</button>
+    <div class="slide-dots" id="dots"></div>
+    <button class="nav-btn" onclick="changeSlide(1)">&#8250;</button>
+    <span class="slide-counter" id="counter">1 / 4</span>
+</div>
+
+<script>
+let current = 1;
+const total = document.querySelectorAll('.slide').length;
+const dotsContainer = document.getElementById('dots');
+const counter = document.getElementById('counter');
+for (let i = 1; i <= total; i++) { const dot = document.createElement('div'); dot.className = 'dot' + (i === 1 ? ' active' : ''); dot.onclick = () => goToSlide(i); dotsContainer.appendChild(dot); }
+function goToSlide(n) {
+    const prev = document.querySelector('.slide.active');
+    const next = document.querySelector(`.slide[data-slide="${n}"]`);
+    if (prev) prev.classList.remove('active');
+    if (next) { next.classList.add('active'); animateSlide(next); }
+    current = n; updateNav();
+}
+function changeSlide(dir) { let next = current + dir; if (next < 1) next = total; if (next > total) next = 1; goToSlide(next); }
+function updateNav() { document.querySelectorAll('.dot').forEach((d, i) => { d.classList.toggle('active', i + 1 === current); }); counter.textContent = current + ' / ' + total; }
+document.addEventListener('keydown', (e) => { if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); changeSlide(1); } if (e.key === 'ArrowLeft') { e.preventDefault(); changeSlide(-1); } });
+let touchStartX = 0;
+document.addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; });
+document.addEventListener('touchend', (e) => { const diff = touchStartX - e.changedTouches[0].clientX; if (Math.abs(diff) > 50) changeSlide(diff > 0 ? 1 : -1); });
+function animateSlide(slide) {
+    slide.querySelectorAll('.reveal').forEach((el, i) => {
+        el.style.transition = 'none'; el.style.opacity = '0'; el.style.transform = 'translateY(16px)';
+        el.offsetHeight;
+        const delay = i * 0.07;
+        el.style.transition = `opacity 0.35s ease ${delay}s, transform 0.35s ease ${delay}s`;
+        el.style.opacity = '1'; el.style.transform = 'translateY(0)';
+    });
+}
+document.addEventListener('mousemove', (e) => {
+    const s = document.querySelector('.mouse-spotlight');
+    if (s) s.style.background = `radial-gradient(600px circle at ${e.clientX}px ${e.clientY}px, rgba(88,166,255,0.05), transparent 40%)`;
+});
+try { animateSlide(document.querySelector('.slide.active')); } catch(e) {}
+</script>
+</body>
+</html>
